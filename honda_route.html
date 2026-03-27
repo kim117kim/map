@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Honda R&D Americas — Route</title>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDummyKeyForDemo"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #1a1a1a;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    color: #fff;
+  }
+
+  #container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #canvas {
+    flex: 1;
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  }
+
+  #info {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(20, 20, 20, 0.9);
+    border: 1px solid #e8334a;
+    padding: 20px;
+    border-radius: 4px;
+    z-index: 100;
+    min-width: 280px;
+  }
+
+  .label-small {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: #00ffb4;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .label-main {
+    font-size: 16px;
+    letter-spacing: 0.15em;
+    color: #fff;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .status-box {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(232, 51, 74, 0.3);
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e8334a;
+    margin-right: 8px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  .status-text {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: #00ffb4;
+    text-transform: uppercase;
+    line-height: 1.6;
+  }
+
+  .distance-display {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(232, 51, 74, 0.1);
+    border-left: 3px solid #e8334a;
+  }
+
+  .distance-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: #888;
+    text-transform: uppercase;
+  }
+
+  .distance-value {
+    font-size: 32px;
+    color: #e8334a;
+    font-weight: bold;
+    margin: 4px 0;
+  }
+
+  .distance-unit {
+    font-size: 10px;
+    color: #666;
+    letter-spacing: 0.1em;
+  }
+
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+  }
+
+  .btn {
+    background: rgba(232, 51, 74, 0.9);
+    border: 1px solid #e8334a;
+    color: #fff;
+    padding: 10px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 2px;
+  }
+
+  .btn:hover {
+    background: #e8334a;
+    box-shadow: 0 0 12px rgba(232, 51, 74, 0.6);
+  }
+
+  #progress-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #e8334a, #ff6b35);
+    width: 0%;
+    z-index: 99;
+  }
+
+  .coord-text {
+    font-size: 9px;
+    color: #666;
+    margin-top: 8px;
+    font-family: monospace;
+    letter-spacing: 0.1em;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+
+<div id="container">
+  <canvas id="canvas"></canvas>
+</div>
+
+<div id="info">
+  <div class="label-small">Honda R&D Americas</div>
+  <div class="label-main">Route Navigation</div>
+  <div style="font-size: 9px; color: #666; letter-spacing: 0.15em;">
+    Torrance, CA · USA
+  </div>
+  
+  <div class="status-box">
+    <div style="margin-bottom: 8px;">
+      <span class="dot"></span>
+      <span class="status-text" id="status-text">Initializing route...</span>
+    </div>
+    <div class="coord-text" id="coords-text">34.0195° N, 118.4912° W</div>
+  </div>
+
+  <div class="distance-display">
+    <div class="distance-label">Total Distance</div>
+    <div class="distance-value" id="dist-value">0.0</div>
+    <div class="distance-unit">MILES</div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" onclick="restartAnimation()">↺ Replay</button>
+  <button class="btn" onclick="toggleSpeed()">⏩ Speed</button>
+</div>
+
+<div id="progress-bar"></div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// 경로 데이터
+const HONDA = [33.8285, -118.2829];
+const START = [34.0195, -118.4912];
+
+const routeCoords = [
+  [34.0195, -118.4912],
+  [34.0150, -118.4850],
+  [34.0080, -118.4700],
+  [33.9950, -118.4600],
+  [33.9800, -118.4480],
+  [33.9650, -118.4400],
+  [33.9500, -118.4350],
+  [33.9350, -118.4100],
+  [33.9200, -118.3900],
+  [33.9100, -118.3750],
+  [33.9000, -118.3600],
+  [33.8900, -118.3450],
+  [33.8800, -118.3300],
+  [33.8700, -118.3200],
+  [33.8600, -118.3100],
+  [33.8500, -118.3000],
+  [33.8400, -118.2950],
+  [33.8350, -118.2900],
+  [33.8310, -118.2865],
+  [33.8285, -118.2829],
+];
+
+// 경로 보간
+function interpolateRoute(coords, steps) {
+  const result = [];
+  for (let i = 0; i < coords.length - 1; i++) {
+    const a = coords[i];
+    const b = coords[i + 1];
+    for (let t = 0; t < steps; t++) {
+      const ratio = t / steps;
+      result.push([
+        a[0] + (b[0] - a[0]) * ratio,
+        a[1] + (b[1] - a[1]) * ratio,
+      ]);
+    }
+  }
+  result.push(coords[coords.length - 1]);
+  return result;
+}
+
+const fullRoute = interpolateRoute(routeCoords, 20);
+
+// 좌표를 스크린 좌표로 변환
+function latLngToScreen(lat, lng) {
+  const x = (lng + 120) * (canvas.width / 2);
+  const y = (34.5 - lat) * (canvas.height / 2);
+  return [x, y];
+}
+
+// 거리 계산
+function calcDistance(a, b) {
+  const R = 3958.8;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const lat1 = a[0] * Math.PI / 180;
+  const lat2 = b[0] * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+let step = 0;
+let animId = null;
+let speedMult = 1;
+let totalDist = 0;
+
+for (let i = 1; i < fullRoute.length; i++) {
+  totalDist += calcDistance(fullRoute[i-1], fullRoute[i]);
+}
+
+function updateStatus(idx) {
+  const coord = fullRoute[idx];
+  document.getElementById('coords-text').textContent =
+    `${coord[0].toFixed(4)}° N, ${Math.abs(coord[1]).toFixed(4)}° W`;
+
+  const progress = idx / fullRoute.length;
+  if (progress < 0.1) {
+    document.getElementById('status-text').innerHTML = '<span class="dot"></span>Departing Santa Monica...';
+  } else if (progress < 0.5) {
+    document.getElementById('status-text').innerHTML = '<span class="dot"></span>Route active — I-405 S';
+  } else if (progress < 0.85) {
+    document.getElementById('status-text').innerHTML = '<span class="dot"></span>Approaching Torrance...';
+  } else {
+    document.getElementById('status-text').innerHTML = '<span class="dot"></span>Arriving at Honda R&D';
+  }
+
+  let dist = 0;
+  for (let i = 1; i <= idx && i < fullRoute.length; i++) {
+    dist += calcDistance(fullRoute[i-1], fullRoute[i]);
+  }
+  document.getElementById('dist-value').textContent = dist.toFixed(1);
+  document.getElementById('progress-bar').style.width = (progress * 100) + '%';
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 배경 그리드
+  ctx.strokeStyle = 'rgba(232, 51, 74, 0.05)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < canvas.width; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, canvas.height);
+    ctx.stroke();
+  }
+  for (let i = 0; i < canvas.height; i += 50) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(canvas.width, i);
+    ctx.stroke();
+  }
+
+  // 전체 경로 (흐린 배경)
+  ctx.strokeStyle = 'rgba(232, 51, 74, 0.1)';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < fullRoute.length; i++) {
+    const [x, y] = latLngToScreen(fullRoute[i][0], fullRoute[i][1]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // 지금까지의 경로 (메인)
+  ctx.strokeStyle = '#e8334a';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let i = 0; i <= step; i++) {
+    const [x, y] = latLngToScreen(fullRoute[i][0], fullRoute[i][1]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // 글로우 효과
+  ctx.strokeStyle = 'rgba(232, 51, 74, 0.2)';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  for (let i = 0; i <= step; i++) {
+    const [x, y] = latLngToScreen(fullRoute[i][0], fullRoute[i][1]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // 현재 위치 표시
+  if (step < fullRoute.length) {
+    const [x, y] = latLngToScreen(fullRoute[step][0], fullRoute[step][1]);
+    
+    // 펄싱 원
+    ctx.fillStyle = 'rgba(232, 51, 74, 0.3)';
+    ctx.beginPath();
+    ctx.arc(x, y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 중심 점
+    ctx.fillStyle = '#e8334a';
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 테두리
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 시작점
+  const [startX, startY] = latLngToScreen(START[0], START[1]);
+  ctx.fillStyle = 'rgba(0, 255, 180, 0.3)';
+  ctx.beginPath();
+  ctx.arc(startX, startY, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#00ffb4';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 도착점
+  const [endX, endY] = latLngToScreen(HONDA[0], HONDA[1]);
+  ctx.fillStyle = 'rgba(232, 51, 74, 0.3)';
+  ctx.beginPath();
+  ctx.arc(endX, endY, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#e8334a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  
+  // 도착점 레이블
+  ctx.fillStyle = '#e8334a';
+  ctx.font = 'bold 11px "Courier New"';
+  ctx.fillText('HONDA R&D', endX + 15, endY - 5);
+}
+
+function animate() {
+  if (step < fullRoute.length) {
+    draw();
+    updateStatus(step);
+    step++;
+    const delay = Math.max(10, 40 / speedMult);
+    animId = setTimeout(animate, delay);
+  } else {
+    draw();
+    document.getElementById('status-text').innerHTML = '✓ <span class="dot"></span>Arrived at Honda R&D';
+  }
+}
+
+function restartAnimation() {
+  if (animId) clearTimeout(animId);
+  step = 0;
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('dist-value').textContent = '0.0';
+  setTimeout(animate, 500);
+}
+
+function toggleSpeed() {
+  speedMult = speedMult === 1 ? 3 : speedMult === 3 ? 6 : 1;
+  const btn = document.querySelectorAll('.btn')[1];
+  btn.textContent = speedMult === 1 ? '⏩ Speed' : speedMult === 3 ? '⏩⏩ Fast' : '⏩⏩⏩ Max';
+}
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  draw();
+});
+
+setTimeout(() => animate(), 1000);
+</script>
+</body>
+</html>
