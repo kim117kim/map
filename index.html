@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Honda R&D Americas — Route</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  
+
   body {
-    background: #0a0a0f;
+    background: #0d0d0f;
     font-family: 'Courier New', monospace;
     overflow: hidden;
     width: 100vw;
@@ -20,465 +20,408 @@
   #map {
     width: 100vw;
     height: 100vh;
-    filter: saturate(0) brightness(0.4) contrast(1.2);
   }
 
-  /* 다크 오버레이 */
-  #overlay {
+  /* 비네트 */
+  #vignette {
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 500;
-    background: 
-      radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+    z-index: 10;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.65) 100%);
   }
 
-  /* 스캔라인 효과 */
-  #scanlines {
+  /* 상단 UI */
+  #ui-top {
     position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 501;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 255, 180, 0.015) 2px,
-      rgba(0, 255, 180, 0.015) 4px
-    );
-  }
-
-  /* UI 패널 */
-  #ui {
-    position: fixed;
-    top: 40px;
-    left: 40px;
-    z-index: 600;
+    top: 32px;
+    left: 36px;
+    z-index: 20;
     pointer-events: none;
   }
 
-  .label-small {
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    color: rgba(0, 255, 180, 0.5);
+  .tag {
+    font-size: 9px;
+    letter-spacing: 0.35em;
+    color: rgba(51,130,204,0.6);
     text-transform: uppercase;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
   }
 
-  .label-main {
-    font-size: 13px;
-    letter-spacing: 0.15em;
-    color: rgba(0, 255, 180, 0.9);
+  .title {
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.88);
+    text-transform: uppercase;
+    font-weight: normal;
+  }
+
+  .subtitle {
+    margin-top: 4px;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.3);
     text-transform: uppercase;
   }
 
-  #status {
+  /* 진행바 */
+  #progress-wrap {
     position: fixed;
-    bottom: 40px;
-    left: 40px;
-    z-index: 600;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.06);
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  #progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #3382CC, #66b3ff);
+    box-shadow: 0 0 8px rgba(51,130,204,0.8);
+    transition: width 0.15s linear;
+  }
+
+  /* 하단 좌측 상태 */
+  #ui-bottom-left {
+    position: fixed;
+    bottom: 36px;
+    left: 36px;
+    z-index: 20;
     pointer-events: none;
   }
 
   .status-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
+    gap: 9px;
+    margin-bottom: 7px;
   }
 
-  .dot {
-    width: 6px;
-    height: 6px;
+  .pulse-dot {
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: #00ffb4;
-    animation: pulse 1.5s ease-in-out infinite;
+    background: #3382CC;
+    animation: dotPulse 1.8s ease-in-out infinite;
   }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.3; transform: scale(0.7); }
+  @keyframes dotPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(51,130,204,0.6); }
+    50% { opacity: 0.5; box-shadow: 0 0 0 4px rgba(51,130,204,0); }
   }
 
-  .status-text {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: rgba(0, 255, 180, 0.7);
+  .status-label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: rgba(255,255,255,0.5);
     text-transform: uppercase;
   }
 
-  #distance-bar {
+  .coords {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.2);
+    padding-left: 14px;
+  }
+
+  /* 하단 우측 거리 */
+  #ui-bottom-right {
     position: fixed;
-    bottom: 40px;
-    right: 40px;
-    z-index: 600;
+    bottom: 36px;
+    right: 36px;
+    z-index: 20;
     pointer-events: none;
     text-align: right;
   }
 
-  .dist-label {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: rgba(0, 255, 180, 0.5);
+  .dist-tag {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: rgba(255,255,255,0.3);
     text-transform: uppercase;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
-  .dist-value {
-    font-size: 28px;
-    letter-spacing: 0.05em;
-    color: rgba(0, 255, 180, 0.9);
-    font-weight: bold;
+  .dist-num {
+    font-size: 30px;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 0.04em;
+    line-height: 1;
   }
 
   .dist-unit {
-    font-size: 11px;
-    color: rgba(0, 255, 180, 0.5);
-    letter-spacing: 0.2em;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: rgba(51,130,204,0.7);
+    text-transform: uppercase;
+    margin-top: 3px;
   }
 
-  /* 재생 버튼 */
+  /* 컨트롤 */
   #controls {
     position: fixed;
-    bottom: 40px;
+    bottom: 36px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 600;
+    z-index: 20;
     display: flex;
-    gap: 12px;
+    gap: 10px;
   }
 
   .btn {
-    background: transparent;
-    border: 1px solid rgba(0, 255, 180, 0.4);
-    color: rgba(0, 255, 180, 0.8);
-    padding: 8px 20px;
+    background: rgba(13,13,15,0.85);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.55);
+    padding: 7px 18px;
     font-family: 'Courier New', monospace;
-    font-size: 10px;
-    letter-spacing: 0.2em;
+    font-size: 9px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.2s;
-    pointer-events: all;
+    backdrop-filter: blur(6px);
   }
 
   .btn:hover {
-    background: rgba(0, 255, 180, 0.1);
-    border-color: rgba(0, 255, 180, 0.8);
-    color: #00ffb4;
+    border-color: rgba(51,130,204,0.6);
+    color: rgba(51,130,204,0.9);
   }
 
-  /* 진행바 */
-  #progress-container {
+  /* 뷰 모드 표시 */
+  #view-label {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: rgba(0, 255, 180, 0.1);
-    z-index: 600;
+    top: 32px;
+    right: 36px;
+    z-index: 20;
     pointer-events: none;
+    text-align: right;
   }
 
-  #progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #00ffb4, #00d4ff);
-    width: 0%;
-    transition: width 0.1s linear;
-    box-shadow: 0 0 8px #00ffb4;
-  }
-
-  /* 마커 커스텀 */
-  .custom-marker {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid #00ffb4;
-    background: rgba(0, 255, 180, 0.3);
-    box-shadow: 0 0 12px #00ffb4, 0 0 24px rgba(0,255,180,0.3);
-    animation: markerPulse 2s ease-in-out infinite;
-  }
-
-  .destination-marker {
-    background: rgba(255, 100, 100, 0.3);
-    border-color: #ff6464;
-    box-shadow: 0 0 12px #ff6464, 0 0 24px rgba(255,100,100,0.3);
-    animation: none;
-  }
-
-  @keyframes markerPulse {
-    0%, 100% { box-shadow: 0 0 12px #00ffb4, 0 0 24px rgba(0,255,180,0.3); }
-    50% { box-shadow: 0 0 20px #00ffb4, 0 0 40px rgba(0,255,180,0.5); }
-  }
-
-  .moving-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #00ffb4;
-    box-shadow: 0 0 16px #00ffb4, 0 0 32px rgba(0,255,180,0.6);
-    border: 2px solid white;
+  .view-tag {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: rgba(51,130,204,0.5);
+    text-transform: uppercase;
   }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
-<div id="overlay"></div>
-<div id="scanlines"></div>
-<div id="progress-container"><div id="progress-bar"></div></div>
+<div id="vignette"></div>
+<div id="progress-wrap"><div id="progress-bar"></div></div>
 
-<div id="ui">
-  <div class="label-small">Honda R&D Americas</div>
-  <div class="label-main">Route Navigation</div>
-  <div style="margin-top:8px; font-size:10px; color:rgba(0,255,180,0.4); letter-spacing:0.15em;">
-    TORRANCE · CA · USA
-  </div>
+<div id="ui-top">
+  <div class="tag">Navigation Active</div>
+  <div class="title">Honda R&D Americas</div>
+  <div class="subtitle">Torrance · CA · USA</div>
 </div>
 
-<div id="status">
+<div id="view-label">
+  <div class="view-tag" id="view-mode-text">Top View</div>
+</div>
+
+<div id="ui-bottom-left">
   <div class="status-row">
-    <div class="dot"></div>
-    <div class="status-text" id="status-text">Initializing route...</div>
+    <div class="pulse-dot"></div>
+    <div class="status-label" id="status-text">Initializing...</div>
   </div>
-  <div style="font-size:9px; color:rgba(0,255,180,0.3); letter-spacing:0.15em;" id="coords-text">33.8285° N, 118.2829° W</div>
+  <div class="coords" id="coords-text">34.0195° N, 118.4912° W</div>
 </div>
 
-<div id="distance-bar">
-  <div class="dist-label">Distance</div>
-  <div class="dist-value" id="dist-value">0.0</div>
+<div id="ui-bottom-right">
+  <div class="dist-tag">Distance</div>
+  <div class="dist-num" id="dist-num">0.0</div>
   <div class="dist-unit">miles</div>
 </div>
 
 <div id="controls">
-  <button class="btn" onclick="restartAnimation()">↺ Replay</button>
-  <button class="btn" onclick="toggleSpeed()">⏩ Speed</button>
+  <button class="btn" onclick="restartAnim()">↺ Replay</button>
+  <button class="btn" onclick="cycleSpeed()">⏩ <span id="speed-label">1×</span></button>
 </div>
 
 <script>
-// Honda R&D Americas: 1900 Harpers Way, Torrance, CA
-const HONDA = [33.8285, -118.2829];
-// 출발지: 약 30분 거리 — Santa Monica
-const START = [34.0195, -118.4912];
+mapboxgl.accessToken = 'pk.eyJ1IjoieXVqb3VuZyIsImEiOiJjbW44YWNjam8wNXBwMnBzOTF6Zmo2YnpvIn0._CsYP2CjJKOSOCv8VZ203Q';
 
-// 다크 타일 레이어 (CartoDB Dark Matter)
-const map = L.map('map', {
-  center: [33.93, -118.39],
-  zoom: 12,
-  zoomControl: false,
-  attributionControl: false,
-  dragging: true,
-  scrollWheelZoom: true,
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v11',
+  center: [-118.2829, 33.8285], // Honda 출발지 중심
+  zoom: 11.5,
+  pitch: 0,
+  bearing: 0,
+  antialias: true,
 });
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  subdomains: 'abcd',
-  maxZoom: 19,
-}).addTo(map);
+const HONDA = [-118.2829, 33.8285];
+const START = [-118.4912, 34.0195];
 
-// 커스텀 아이콘
-function makeIcon(cls) {
-  return L.divIcon({
-    className: '',
-    html: `<div class="${cls}"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-  });
-}
-
-// 출발지 마커
-const startMarker = L.marker(START, { icon: makeIcon('custom-marker') }).addTo(map);
-// 도착지 마커 (Honda)
-const endMarker = L.marker(HONDA, { icon: makeIcon('custom-marker destination-marker') }).addTo(map);
-
-// 툴팁
-endMarker.bindTooltip('Honda R&D Americas', {
-  permanent: true,
-  direction: 'right',
-  className: 'honda-tooltip',
-  offset: [10, 0],
-});
-
-// 경로 좌표 생성 (Santa Monica → Torrance via I-405)
-// 실제 도로를 따르는 웨이포인트
-const routeCoords = [
-  [34.0195, -118.4912], // Santa Monica
-  [34.0150, -118.4850],
-  [34.0080, -118.4700],
-  [33.9950, -118.4600],
-  [33.9800, -118.4480],
-  [33.9650, -118.4400],
-  [33.9500, -118.4350],
-  [33.9350, -118.4100],
-  [33.9200, -118.3900],
-  [33.9100, -118.3750],
-  [33.9000, -118.3600],
-  [33.8900, -118.3450],
-  [33.8800, -118.3300],
-  [33.8700, -118.3200],
-  [33.8600, -118.3100],
-  [33.8500, -118.3000],
-  [33.8400, -118.2950],
-  [33.8350, -118.2900],
-  [33.8310, -118.2865],
-  [33.8285, -118.2829], // Honda R&D Americas
+const waypoints = [
+  [-118.2829, 33.8285],
+  [-118.2865, 33.8310],
+  [-118.2900, 33.8350],
+  [-118.2950, 33.8400],
+  [-118.3000, 33.8500],
+  [-118.3100, 33.8600],
+  [-118.3200, 33.8700],
+  [-118.3300, 33.8800],
+  [-118.3450, 33.8900],
+  [-118.3600, 33.9000],
+  [-118.3750, 33.9100],
+  [-118.3900, 33.9200],
+  [-118.4100, 33.9350],
+  [-118.4350, 33.9500],
+  [-118.4400, 33.9650],
+  [-118.4480, 33.9800],
+  [-118.4600, 33.9950],
+  [-118.4700, 34.0080],
+  [-118.4850, 34.0150],
+  [-118.4912, 34.0195],
 ];
 
-// 경로 보간 (부드럽게)
-function interpolateRoute(coords, steps) {
+function interpolate(coords, steps) {
   const result = [];
   for (let i = 0; i < coords.length - 1; i++) {
-    const a = coords[i];
-    const b = coords[i + 1];
+    const a = coords[i], b = coords[i+1];
     for (let t = 0; t < steps; t++) {
-      const ratio = t / steps;
-      result.push([
-        a[0] + (b[0] - a[0]) * ratio,
-        a[1] + (b[1] - a[1]) * ratio,
-      ]);
+      const r = t / steps;
+      result.push([a[0]+(b[0]-a[0])*r, a[1]+(b[1]-a[1])*r]);
     }
   }
-  result.push(coords[coords.length - 1]);
+  result.push(coords[coords.length-1]);
   return result;
 }
 
-const fullRoute = interpolateRoute(routeCoords, 20);
+const fullRoute = interpolate(waypoints, 60);
 
-// 경로 라인 (배경 — 흐린)
-const bgLine = L.polyline([], {
-  color: 'rgba(0, 255, 180, 0.15)',
-  weight: 6,
-  lineCap: 'round',
-}).addTo(map);
-bgLine.setLatLngs(fullRoute);
-
-// 경로 라인 (메인)
-const routeLine = L.polyline([], {
-  color: '#00ffb4',
-  weight: 2.5,
-  lineCap: 'round',
-  opacity: 0.9,
-}).addTo(map);
-
-// 글로우 라인
-const glowLine = L.polyline([], {
-  color: 'rgba(0, 255, 180, 0.3)',
-  weight: 8,
-  lineCap: 'round',
-  opacity: 0.5,
-}).addTo(map);
-
-// 이동 점
-const movingMarker = L.marker(START, { icon: makeIcon('moving-dot'), zIndexOffset: 1000 }).addTo(map);
-
-// 거리 계산
-function calcDistance(a, b) {
-  const R = 3958.8; // miles
-  const dLat = (b[0] - a[0]) * Math.PI / 180;
-  const dLon = (b[1] - a[1]) * Math.PI / 180;
-  const lat1 = a[0] * Math.PI / 180;
-  const lat2 = b[0] * Math.PI / 180;
+function dist(a, b) {
+  const R = 3958.8;
+  const dLat = (b[1]-a[1]) * Math.PI/180;
+  const dLon = (b[0]-a[0]) * Math.PI/180;
+  const lat1 = a[1]*Math.PI/180, lat2 = b[1]*Math.PI/180;
   const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
 }
 
-let step = 0;
-let animId = null;
-let speedMult = 1;
-let totalDist = 0;
+let step = 0, animId = null, speedMult = 1;
+const cameraSequence = [
+  { progress: 0,    pitch: 0,  bearing: 0,   zoom: 11,   label: 'Top View' },
+  { progress: 0.2,  pitch: 45, bearing: -20, zoom: 12.5, label: 'Perspective' },
+  { progress: 0.45, pitch: 60, bearing: -35, zoom: 13,   label: '3D View' },
+  { progress: 0.65, pitch: 30, bearing: 10,  zoom: 12,   label: 'Tilted View' },
+  { progress: 0.85, pitch: 55, bearing: 20,  zoom: 13.5, label: 'Perspective' },
+  { progress: 1.0,  pitch: 0,  bearing: 0,   zoom: 14,   label: 'Top View' },
+];
 
-// 전체 거리 계산
-for (let i = 1; i < fullRoute.length; i++) {
-  totalDist += calcDistance(fullRoute[i-1], fullRoute[i]);
+function getCameraAt(progress) {
+  for (let i = cameraSequence.length - 1; i >= 0; i--) {
+    if (progress >= cameraSequence[i].progress) {
+      const curr = cameraSequence[i];
+      const next = cameraSequence[Math.min(i+1, cameraSequence.length-1)];
+      const t = i === cameraSequence.length-1 ? 1 : (progress - curr.progress) / (next.progress - curr.progress);
+      return {
+        pitch: curr.pitch + (next.pitch - curr.pitch) * t,
+        bearing: curr.bearing + (next.bearing - curr.bearing) * t,
+        zoom: curr.zoom + (next.zoom - curr.zoom) * t,
+        label: curr.label,
+      };
+    }
+  }
+  return cameraSequence[0];
 }
 
-function updateStatus(idx) {
-  const coord = fullRoute[idx];
-  document.getElementById('coords-text').textContent =
-    `${coord[0].toFixed(4)}° N, ${Math.abs(coord[1]).toFixed(4)}° W`;
+map.on('load', () => {
+  map.addLayer({
+    id: '3d-buildings',
+    source: 'composite',
+    'source-layer': 'building',
+    filter: ['==', 'extrude', 'true'],
+    type: 'fill-extrusion',
+    minzoom: 12,
+    paint: {
+      'fill-extrusion-color': '#1a1a2e',
+      'fill-extrusion-height': ['get', 'height'],
+      'fill-extrusion-base': ['get', 'min_height'],
+      'fill-extrusion-opacity': 0.75,
+    }
+  });
 
-  const progress = idx / fullRoute.length;
-  if (progress < 0.1) {
-    document.getElementById('status-text').textContent = 'Departing Santa Monica...';
-  } else if (progress < 0.5) {
-    document.getElementById('status-text').textContent = 'Route active — I-405 S';
-  } else if (progress < 0.85) {
-    document.getElementById('status-text').textContent = 'Approaching Torrance...';
-  } else {
-    document.getElementById('status-text').textContent = 'Arriving at Honda R&D';
-  }
+  new mapboxgl.Marker({ color: '#3382CC' }).setLngLat(START).addTo(map);
+  new mapboxgl.Marker({ color: '#3382CC' }).setLngLat(HONDA).setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setText('Honda R&D Americas')).addTo(map);
 
-  // 진행한 거리
-  let dist = 0;
-  for (let i = 1; i <= idx && i < fullRoute.length; i++) {
-    dist += calcDistance(fullRoute[i-1], fullRoute[i]);
-  }
-  document.getElementById('dist-value').textContent = dist.toFixed(1);
-  document.getElementById('progress-bar').style.width = (progress * 100) + '%';
-}
+  map.addSource('route-bg', {
+    type: 'geojson',
+    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: fullRoute } }
+  });
+  map.addLayer({
+    id: 'route-bg',
+    type: 'line',
+    source: 'route-bg',
+    paint: {
+      'line-color': 'rgba(51,130,204,0.12)',
+      'line-width': 10,
+      'line-cap': 'round',
+    }
+  });
 
+  map.addSource('route-anim', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+  map.addLayer({ id: 'route-glow', type: 'line', source: 'route-anim', paint: { 'line-color': 'rgba(51,130,204,0.25)', 'line-width': 14, 'line-cap': 'round', 'line-blur': 4 }});
+  map.addLayer({ id: 'route-line', type: 'line', source: 'route-anim', paint: { 'line-color': '#3382CC', 'line-width': 3.5, 'line-cap': 'round' }});
+
+  map.addSource('moving-dot', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Point', coordinates: START } } });
+  map.addLayer({ id: 'moving-dot-glow', type: 'circle', source: 'moving-dot', paint: { 'circle-radius': 14, 'circle-color': 'rgba(51,130,204,0.2)', 'circle-blur': 0.5 }});
+  map.addLayer({ id: 'moving-dot', type: 'circle', source: 'moving-dot', paint: { 'circle-radius': 6, 'circle-color': '#3382CC', 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' }});
+
+  setTimeout(() => startAnim(), 1200);
+});
+
+function startAnim() { step = 0; animate(); }
 function animate() {
-  if (step >= fullRoute.length) {
-    document.getElementById('status-text').textContent = '✓ Arrived — Honda R&D Americas';
-    return;
-  }
+  if (step >= fullRoute.length) { document.getElementById('status-text').textContent = '✓ Arrived — Honda R&D Americas'; return; }
 
   const current = fullRoute.slice(0, step + 1);
-  routeLine.setLatLngs(current);
-  glowLine.setLatLngs(current);
-  movingMarker.setLatLng(fullRoute[step]);
+  map.getSource('route-anim').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: current }});
+  map.getSource('moving-dot').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: fullRoute[step] }});
 
-  // 카메라 부드럽게 따라가기
-  if (step % 15 === 0) {
-    map.panTo(fullRoute[step], { animate: true, duration: 1.5 });
+  const progress = step / fullRoute.length;
+  const cam = getCameraAt(progress);
+  if (step % 8 === 0) {
+    map.easeTo({ center: fullRoute[step], pitch: cam.pitch, bearing: cam.bearing, zoom: cam.zoom, duration: 800, easing: t => t });
+    document.getElementById('view-mode-text').textContent = cam.label;
   }
 
-  updateStatus(step);
-  step++;
+  let d = 0;
+  for (let i = 1; i <= step && i < fullRoute.length; i++) d += dist(fullRoute[i-1], fullRoute[i]);
+  document.getElementById('dist-num').textContent = d.toFixed(1);
+  document.getElementById('progress-bar').style.width = (progress * 100) + '%';
 
-  const delay = Math.max(10, 40 / speedMult);
+  const c = fullRoute[step];
+  document.getElementById('coords-text').textContent = `${c[1].toFixed(4)}° N, ${Math.abs(c[0]).toFixed(4)}° W`;
+  if (progress < 0.1) document.getElementById('status-text').textContent = 'Departing Santa Monica...';
+  else if (progress < 0.5) document.getElementById('status-text').textContent = 'Route active — I-405 S';
+  else if (progress < 0.85) document.getElementById('status-text').textContent = 'Approaching Torrance...';
+  else document.getElementById('status-text').textContent = 'Arriving at Honda R&D...';
+
+  step++;
+  const delay = Math.max(8, 45 / speedMult);
   animId = setTimeout(() => requestAnimationFrame(animate), delay);
 }
 
-function restartAnimation() {
+function restartAnim() {
   if (animId) clearTimeout(animId);
   step = 0;
-  routeLine.setLatLngs([]);
-  glowLine.setLatLngs([]);
-  movingMarker.setLatLng(START);
+  map.getSource('route-anim').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }});
+  map.getSource('moving-dot').setData({ type: 'Feature', geometry: { type: 'Point', coordinates: START }});
   document.getElementById('progress-bar').style.width = '0%';
-  document.getElementById('dist-value').textContent = '0.0';
-  map.flyTo([33.93, -118.39], 12, { duration: 1.5 });
-  setTimeout(() => animate(), 1800);
+  document.getElementById('dist-num').textContent = '0.0';
+  map.flyTo({ center: [-118.39, 33.93], zoom: 11, pitch: 0, bearing: 0, duration: 1500 });
+  setTimeout(() => startAnim(), 1800);
 }
 
-function toggleSpeed() {
-  speedMult = speedMult === 1 ? 3 : speedMult === 3 ? 6 : 1;
-  const btn = document.querySelector('.btn:last-child');
-  btn.textContent = speedMult === 1 ? '⏩ Speed' : speedMult === 3 ? '⏩⏩ Fast' : '⏩⏩⏩ Max';
-}
-
-// 툴팁 스타일
-const style = document.createElement('style');
-style.textContent = `
-  .honda-tooltip {
-    background: rgba(0,0,0,0.8) !important;
-    border: 1px solid rgba(0,255,180,0.5) !important;
-    color: rgba(0,255,180,0.9) !important;
-    font-family: 'Courier New', monospace !important;
-    font-size: 10px !important;
-    letter-spacing: 0.15em !important;
-    padding: 4px 8px !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-  }
-  .honda-tooltip::before { display: none !important; }
-  .leaflet-tooltip-left.honda-tooltip::before { display: none !important; }
-`;
-document.head.appendChild(style);
-
-// 시작
-setTimeout(() => animate(), 1000);
+const speeds = [1,2,4,8];
+let speedIdx = 0;
+function cycleSpeed() { speedIdx = (speedIdx + 1) % speeds.length; speedMult = speeds[speedIdx]; document.getElementById('speed-label').textContent = speedMult + '×'; }
 </script>
 </body>
 </html>
