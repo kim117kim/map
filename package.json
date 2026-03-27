@@ -1,0 +1,24 @@
+{
+  "name": "map",
+  "version": "1.0.0",
+  "description": "**[👉 Honda Route Map 클릭해서 보기](https://raw.github.com/kim117kim/map/main/honda_route.html)**",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kim117kim/map.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kim117kim/map/issues"
+  },
+  "homepage": "https://github.com/kim117kim/map#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
